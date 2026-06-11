@@ -1,0 +1,16 @@
+{
+  "name": "monitor-pzem-004t",
+  "version": "1.0.0",
+  "description": "Monitor PZEM-004T via MQTT",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": "18.x"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mqtt": "^5.3.4"
+  }
+}
