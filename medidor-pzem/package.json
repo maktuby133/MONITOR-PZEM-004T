@@ -1,1 +1,16 @@
-
+{
+  "name": "medidor-pzem-mqtt",
+  "version": "2.0.0",
+  "description": "Servidor MQTT + Web Push + Google Sheets PZEM-004T",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "mqtt": "^5.3.4",
+    "web-push": "^3.6.7",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "googleapis": "^144.0.0"
+  }
+}
