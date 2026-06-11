@@ -20,12 +20,12 @@ webpush.setVapidDetails(
 
 // ── GOOGLE SHEETS ────────────────────────────────────
 const auth = new google.auth.GoogleAuth({
-  keyFile: path.join(__dirname, 'credentials.json'), // Baixe do Google Cloud Console
+  keyFile: path.join(__dirname, 'credentials.json'),
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 
-const SHEET_ID = 'SEU_SHEET_ID_AQUI'; // ID da planilha do Google
-const SHEET_NAME = 'Medidor'; // Nome da aba
+const SHEET_ID = 'COLE_SEU_ID_AQUI'; // Ex: 1ABCdefGHIjklMNOpqrsTUVwxyz123456
+const SHEET_NAME = 'Medidor';
 
 async function salvarNoSheets(dados) {
   try {
@@ -41,18 +41,18 @@ async function salvarNoSheets(dados) {
       requestBody: {
         values: [[
           data,
-          dados.voltage,
-          dados.current,
-          dados.power,
-          dados.energy,
-          dados.frequency,
-          dados.pf,
-          dados.energia_hoje,
-          dados.energia_semana,
-          dados.energia_mes,
-          dados.custo,
-          dados.rssi,
-          dados.timestamp
+          dados.voltage || 0,
+          dados.current || 0,
+          dados.power || 0,
+          dados.energy || 0,
+          dados.frequency || 0,
+          dados.pf || 0,
+          dados.energia_hoje || 0,
+          dados.energia_semana || 0,
+          dados.energia_mes || 0,
+          dados.custo || 0,
+          dados.rssi || 0,
+          dados.timestamp || Date.now()
         ]]
       }
     });
@@ -77,6 +77,7 @@ mqttClient.on('connect', () => {
   console.log('[MQTT] Conectado');
   mqttClient.subscribe('casa/+/dados');
   mqttClient.subscribe('casa/+/alerta');
+  mqttClient.subscribe('casa/+/resumo');
 });
 
 mqttClient.on('message', async (topic, message) => {
@@ -91,28 +92,28 @@ mqttClient.on('message', async (topic, message) => {
     }
 
     // Alerta corrente alta
-    const corrente = parseFloat(payload.corrente);
+    const corrente = parseFloat(payload.corrente || payload.current);
     if (!isNaN(corrente) && corrente > 15) {
       const key = `${deviceId}_corrente`;
       if (Date.now() - (lastAlert[key] || 0) > ALERT_INTERVAL_MS) {
         lastAlert[key] = Date.now();
-        const msg = `⚠️ Sobrecarga: ${corrente}A`;
+        const msg = `⚠️ Sobrecarga: ${corrente.toFixed(2)}A`;
         await enviarPush(deviceId, msg);
       }
     }
 
     // Alerta tensão anormal
-    const tensao = parseFloat(payload.tensao);
+    const tensao = parseFloat(payload.tensao || payload.voltage);
     if (!isNaN(tensao) && (tensao < 110 || tensao > 240)) {
       const key = `${deviceId}_tensao`;
       if (Date.now() - (lastAlert[key] || 0) > ALERT_INTERVAL_MS) {
         lastAlert[key] = Date.now();
-        const msg = `⚠️ Tensão anormal: ${tensao}V`;
+        const msg = `⚠️ Tensão anormal: ${tensao.toFixed(1)}V`;
         await enviarPush(deviceId, msg);
       }
     }
   } catch(e) {
-    console.error('[MQTT] Erro:', e);
+    console.error('[MQTT] Erro:', e.message);
   }
 });
 
@@ -144,7 +145,6 @@ async function inicializarPlanilha() {
     const client = await auth.getClient();
     const sheets = google.sheets({ version: 'v4', auth: client });
 
-    // Verifica se já tem cabeçalho
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
       range: `${SHEET_NAME}!A1:M1`
