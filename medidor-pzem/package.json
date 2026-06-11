@@ -1,16 +1,25 @@
 {
   "name": "medidor-pzem-mqtt",
   "version": "2.0.0",
-  "description": "Servidor MQTT + Web Push + Google Sheets PZEM-004T",
+  "description": "Medidor PZEM-004T com LoRa + MQTT + Google Sheets",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js"
   },
   "dependencies": {
     "mqtt": "^5.3.4",
     "web-push": "^3.6.7",
     "express": "^4.18.2",
     "cors": "^2.8.5",
-    "googleapis": "^144.0.0"
+    "googleapis": "^144.0.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/seu-usuario/medidor-pzem.git"
   }
 }
