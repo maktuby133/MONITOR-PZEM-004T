@@ -4,18 +4,26 @@ const mqtt = require('mqtt');
 const webpush = require('web-push');
 const { google } = require('googleapis');
 const path = require('path');
+require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
+
+// ── SERVIR ARQUIVOS ESTÁTICOS - IMPORTANTE! ──────────────────
+app.use(express.static(path.join(__dirname, 'public')));
+
+// ── ROTA PRINCIPAL - FORÇA INDEX.HTML ───────────────────────
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 webpush.setVapidDetails(
-  'mailto:seu@email.com',
-  'BAr__h-peUzkzXFpUc0azRN70irT6bQVz1PHsUbsWIH2w5BDV1KligHC116A6bXXg_BVW7SpkvCNNm0gadgEuMc',
-  '4zqMat_A0PLPWh9Nn9OaVFPcqocvFWp0tQgdslBkMV4'
+  process.env.VAPID_MAILTO || 'mailto:seu@email.com',
+  process.env.VAPID_PUBLIC_KEY,
+  process.env.VAPID_PRIVATE_KEY
 );
 
 // ── GOOGLE SHEETS ────────────────────────────────────
@@ -24,8 +32,8 @@ const auth = new google.auth.GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 
-const SHEET_ID = 'COLE_SEU_ID_AQUI'; // Ex: 1ABCdefGHIjklMNOpqrsTUVwxyz123456
-const SHEET_NAME = 'Medidor';
+const SHEET_ID = process.env.GOOGLE_SHEET_ID;
+const SHEET_NAME = process.env.GOOGLE_SHEET_NAME || 'Medidor';
 
 async function salvarNoSheets(dados) {
   try {
@@ -63,9 +71,9 @@ async function salvarNoSheets(dados) {
 }
 
 // ── MQTT ─────────────────────────────────────────────
-const mqttClient = mqtt.connect('mqtts://07847a67e2944aca805e81e761a6f177.s1.eu.hivemq.cloud:8883', {
-  username: 'monitortemp',
-  password: '061084Cc@',
+const mqttClient = mqtt.connect(`mqtts://${process.env.MQTT_HOST}:${process.env.MQTT_PORT}`, {
+  username: process.env.MQTT_USER,
+  password: process.env.MQTT_PASS,
   rejectUnauthorized: false
 });
 
@@ -86,30 +94,25 @@ mqttClient.on('message', async (topic, message) => {
     const deviceId = parts[1];
     const payload = JSON.parse(message.toString());
 
-    // Salva no Google Sheets
     if (topic.endsWith('/dados')) {
       await salvarNoSheets(payload);
     }
 
-    // Alerta corrente alta
     const corrente = parseFloat(payload.corrente || payload.current);
     if (!isNaN(corrente) && corrente > 15) {
       const key = `${deviceId}_corrente`;
       if (Date.now() - (lastAlert[key] || 0) > ALERT_INTERVAL_MS) {
         lastAlert[key] = Date.now();
-        const msg = `⚠️ Sobrecarga: ${corrente.toFixed(2)}A`;
-        await enviarPush(deviceId, msg);
+        await enviarPush(deviceId, `⚠️ Sobrecarga: ${corrente.toFixed(2)}A`);
       }
     }
 
-    // Alerta tensão anormal
     const tensao = parseFloat(payload.tensao || payload.voltage);
     if (!isNaN(tensao) && (tensao < 110 || tensao > 240)) {
       const key = `${deviceId}_tensao`;
       if (Date.now() - (lastAlert[key] || 0) > ALERT_INTERVAL_MS) {
         lastAlert[key] = Date.now();
-        const msg = `⚠️ Tensão anormal: ${tensao.toFixed(1)}V`;
-        await enviarPush(deviceId, msg);
+        await enviarPush(deviceId, `⚠️ Tensão anormal: ${tensao.toFixed(1)}V`);
       }
     }
   } catch(e) {
@@ -157,19 +160,10 @@ async function inicializarPlanilha() {
         valueInputOption: 'USER_ENTERED',
         requestBody: {
           values: [[
-            'Data/Hora',
-            'Tensão (V)',
-            'Corrente (A)',
-            'Potência (W)',
-            'Energia Total (kWh)',
-            'Frequência (Hz)',
-            'Fator Potência',
-            'Energia Hoje (kWh)',
-            'Energia Semana (kWh)',
-            'Energia Mês (kWh)',
-            'Custo (R$)',
-            'RSSI (dBm)',
-            'Timestamp'
+            'Data/Hora', 'Tensão (V)', 'Corrente (A)', 'Potência (W)',
+            'Energia Total (kWh)', 'Frequência (Hz)', 'Fator Potência',
+            'Energia Hoje (kWh)', 'Energia Semana (kWh)', 'Energia Mês (kWh)',
+            'Custo (R$)', 'RSSI (dBm)', 'Timestamp'
           ]]
         }
       });
@@ -182,5 +176,6 @@ async function inicializarPlanilha() {
 
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
+  console.log(`Acesse: http://localhost:${PORT}`);
   inicializarPlanilha();
 });
