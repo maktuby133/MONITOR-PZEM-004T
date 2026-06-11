@@ -1,24 +1,30 @@
 const express = require('express');
 const mqtt = require('mqtt');
 const path = require('path');
-require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Servir arquivos estáticos da pasta public
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-// Variáveis de ambiente do Railway
-const MQTT_BROKER = process.env.MQTT_BROKER || 'cee37ceeb13242b3a9099f84327c2c1c.s1.eu.hivemq.cloud';
-const MQTT_PORT = process.env.MQTT_PORT || 1883;
-const MQTT_TOPIC = process.env.MQTT_TOPIC || 'casa/medidor01';
+// DADOS DO HIVEMQ CLOUD JÁ PREENCHIDOS
+const MQTT_BROKER = 'mqtts://cee37ceeb13242b3a9099f84327c2c1c.s1.eu.hivemq.cloud';
+const MQTT_PORT = 8883;
+const MQTT_TOPIC = 'casa/medidor01';
+const MQTT_USER = 'monitortemp';
+const MQTT_PASS = '061084Cc@';
 
-// Conecta no MQTT
+console.log('Iniciando conexão MQTT...');
+console.log('Broker:', MQTT_BROKER);
+
 const client = mqtt.connect(MQTT_BROKER, {
   port: MQTT_PORT,
-  reconnectPeriod: 5000
+  username: MQTT_USER,
+  password: MQTT_PASS,
+  protocol: 'mqtts',
+  reconnectPeriod: 5000,
+  connectTimeout: 30000
 });
 
 let ultimaLeitura = {
@@ -26,16 +32,19 @@ let ultimaLeitura = {
   corrente: 0,
   potencia: 0,
   energia: 0,
-  timestamp: null
+  timestamp: null,
+  status: 'Conectando...'
 };
 
 client.on('connect', () => {
-  console.log('Conectado ao MQTT:', MQTT_BROKER);
+  console.log('✅ Conectado ao MQTT:', MQTT_BROKER);
+  ultimaLeitura.status = 'Conectado';
+  
   client.subscribe(MQTT_TOPIC, (err) => {
     if (err) {
-      console.error('Erro ao inscrever no tópico:', err);
+      console.error('❌ Erro ao inscrever no tópico:', err);
     } else {
-      console.log('Inscrito no tópico:', MQTT_TOPIC);
+      console.log('✅ Inscrito no tópico:', MQTT_TOPIC);
     }
   });
 });
@@ -44,32 +53,37 @@ client.on('message', (topic, message) => {
   try {
     const dados = JSON.parse(message.toString());
     ultimaLeitura = {
-      tensao: dados.tensao || 0,
-      corrente: dados.corrente || 0,
-      potencia: dados.potencia || 0,
-      energia: dados.energia || 0,
-      timestamp: new Date().toISOString()
+      tensao: parseFloat(dados.tensao) || 0,
+      corrente: parseFloat(dados.corrente) || 0,
+      potencia: parseFloat(dados.potencia) || 0,
+      energia: parseFloat(dados.energia) || 0,
+      timestamp: new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+      status: 'Online'
     };
-    console.log('Dados recebidos:', ultimaLeitura);
+    console.log('📊 Dados recebidos:', ultimaLeitura);
   } catch (e) {
-    console.error('Erro ao processar mensagem MQTT:', e);
+    console.error('❌ Erro ao processar mensagem:', e.message);
   }
 });
 
 client.on('error', (err) => {
-  console.error('Erro MQTT:', err);
+  console.error('❌ Erro MQTT:', err.message);
+  ultimaLeitura.status = 'Erro: ' + err.message;
 });
 
-// Rota API pra pegar última leitura
+client.on('offline', () => {
+  console.log('⚠️ MQTT Offline');
+  ultimaLeitura.status = 'Offline';
+});
+
 app.get('/api/dados', (req, res) => {
   res.json(ultimaLeitura);
 });
 
-// Rota principal serve o index.html
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server rodando na porta ${PORT}`);
+  console.log(`🚀 Server rodando na porta ${PORT}`);
 });
